@@ -1,1 +1,1 @@
-# Realltime-Yoga-Pose-Detection
+# Realtime-Yoga-Pose-Detection
