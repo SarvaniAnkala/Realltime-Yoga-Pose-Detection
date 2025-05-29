@@ -19,13 +19,14 @@ def calculate_angle(a, b, c):
     b = np.array(b)
     c = np.array(c)
     radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
-    angle = np.abs(radians*180.0/np.pi)
+    angle = np.abs(radians * 180.0 / np.pi)
     if angle > 180.0:
         angle = 360 - angle
     return angle
 
 def give_feedback(pose_label, landmarks):
     feedback = []
+
     def get_coords(name):
         lm = mp_pose.PoseLandmark[name]
         return [landmarks[lm].x, landmarks[lm].y]
@@ -103,23 +104,40 @@ with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as 
 
             if len(keypoints) == 99:
                 input_df = pd.DataFrame([keypoints], columns=feature_names)
-                prediction = model.predict(input_df)[0]
-                predicted_label = label_encoder.inverse_transform([prediction])[0]
 
-                # Draw label
-                cv2.putText(image, f'Pose: {predicted_label}', (10, 40),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+                if hasattr(model, "predict_proba"):
+                    proba = model.predict_proba(input_df)[0]
+                    confidence = max(proba)
+                    prediction = np.argmax(proba)
 
-                # Get feedback
-                feedback_list = give_feedback(predicted_label.lower(), landmarks)
-                for idx, feedback in enumerate(feedback_list):
-                    cv2.putText(image, feedback, (10, 70 + 30 * idx),
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+                    if confidence > 0.4:
+                        predicted_label = label_encoder.inverse_transform([prediction])[0]
+                        cv2.putText(image, f'Pose: {predicted_label}', (10, 40),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+                        # Optional: Show confidence
+                        cv2.putText(image, f'Confidence: {confidence:.2f}', (10, 75),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
+
+                        feedback_list = give_feedback(predicted_label.lower(), landmarks)
+                        for idx, feedback in enumerate(feedback_list):
+                            cv2.putText(image, feedback, (10, 110 + 30 * idx),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                    else:
+                        cv2.putText(image, "No valid pose detected", (10, 40),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                else:
+                    prediction = model.predict(input_df)[0]
+                    predicted_label = label_encoder.inverse_transform([prediction])[0]
+                    cv2.putText(image, f'Pose: {predicted_label}', (10, 40),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
         except Exception as e:
             print("Error:", e)
 
-        mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+        if results.pose_landmarks:
+            mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+
         cv2.imshow('Yoga Pose Detection', image)
 
         if cv2.waitKey(10) & 0xFF == ord('q'):
